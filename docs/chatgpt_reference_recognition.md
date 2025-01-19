@@ -10,18 +10,11 @@ Steps taken for each experiment:
     For text where reference markers (e.g: `[2]`, `[2-5]` etc.) are still present: 
     
     ```text
-    I have this scientific paper text from a conference, but I lost all its
-    references. Could you take a look and attempt to find every single reference
-    from this paper? Meaning, for each "[x]" or "[x, y]" or "[x-x+n]" mark, try to
-    figure out what papers were being cited.
+    I have this scientific paper text from a conference, but I lost all its references. Could you take a look and attempt to find every single reference from this paper? Meaning, for each "[x]" or "[x, y]" or "[x-x+n]" mark, try to figure out what papers were being cited.
     
-    Please keep in mind that this paper is from a renowned scientific conference,
-    meaning it is likely that all of its references come from academic works such
-    as scientific journals and scientific conferences.
+    Please keep in mind that this paper is from a renowned scientific conference, meaning it is likely that all of its references come from academic works such as scientific journals and scientific conferences.
     
-    I will now proceed to give you parts of the text in separate messages, as it's
-    too long for one message. After each part, please give me the references. Here
-    is the first part:
+    I will now proceed to give you parts of the text in separate messages, as it's too long for one message. After each part, please give me the references. Here is the first part:
     ```
 
     The purpose of the second paragraph is to make sure that the chatbot won't
@@ -56,11 +49,18 @@ Steps taken for each experiment:
 5. Proceed to give parts of the paper to ChatGPT (has to be done in batches as
    the text is too long for one message for most papers)
 
+The papers used for this experiment are referred to as follows:
+
+- Paper 1 = a paper in the peer review process at the time of writing, citing a
+lot of cutting edge research
+- Paper 2 = an older, very popular paper (150k+ citations)
+- Paper 3 = an older, less popular paper (~50 citations)
+
 ## Paper 1 with reference markers
 
 The first experiment uses a **fairly recent paper** currently submitted for peer
 review, this means that there's almost **no chance** that ChatGPT has already been
-**trained on its text**, so all references should be proper guesses.
+**trained on its text**, so all references should be **proper** guesses.
 
 - [Link to paper](https://openreview.net/forum?id=zogaeVpbaE#discussion)
 - [Link to ChatGPT conversation](https://chatgpt.com/share/67890704-faa0-800e-ab8f-e8e9c7e0e74f)
@@ -124,3 +124,72 @@ following two areas would be good ways to investigate further:
 
 - an obscure paper that is older
 - a popular paper that is older
+
+## Paper 2 (older, very popular) with reference markers
+
+- [Link to paper](https://arxiv.org/pdf/1706.03762)
+- [Link to ChatGPT conversation](https://chatgpt.com/share/678d30a2-fb80-800e-b24e-f44027fc94a1)
+
+This time we're using a paper that is a bit older (2017), so most references
+should have been trained on. The paper is also quite popular (and the basis of
+ChatGPT), so the paper itself is probably trained on as well.
+
+The results are quite a bit better, with a 50% correct guess rate!
+
+Again, the paper was too long and at some point the model's context ran out.
+This time, a consequence of this was that a reference that previously guessed
+correctly (`[9]`), ended being reguessed incorrectly later on.
+
+## Paper 2 (older, very popular) without reference markers
+
+- [Link to paper](https://arxiv.org/pdf/1706.03762)
+- [Link to ChatGPT conversation](https://chatgpt.com/share/678d36a3-4184-800e-8f98-ae5c2a0b0678)
+
+Without the citations, we still get 8 out of 40 found citations, but with a
+large amount of false positives (17).
+
+The model also makes some pretty illogical errors, despite the fact that it
+recognizes this paper, it still recommends papers like `Understanding the
+transformers` which came out after this paper (and is based directly on it).
+
+## Paper 3 (older, not so popular) with reference markers
+
+- [Link to paper](https://www.cs.cmu.edu/~junchenj/comsnet-ddn.pdf)
+- [Link to ChatGPT conversation](https://chatgpt.com/share/678d3e1b-4ae8-800e-9874-8e56ec9bdacd)
+
+The main difference from the previous paper is its popularity, this is
+definitely felt in the results, with the model only guessing correctly
+3 times out of 57. The model had to make up a couple of paper names.
+
+I will however give it credit that it proposed the MapReduce paper as a
+reference, which it definitely should've been. 
+
+## Paper 3 (older, not so popular) without reference markers
+
+- [Link to paper](https://www.cs.cmu.edu/~junchenj/comsnet-ddn.pdf)
+- [Link to ChatGPT conversation](https://chatgpt.com/share/678d4108-7428-800e-8bd2-f9d8da0f8d7c)
+
+Slightly worse this time, 2 out 57 and 19 false postives. The model guessed
+pretty much the same papers as last time.
+
+It seems that the issue here is that we're simply giving it too much cutting
+edge research that cites other cutting edge research, therefore _maybe_ we
+could get better results by using even older papers, but arguably there
+wouldn't be much point to it, as the main use case for missing reference
+detection is for new papers which are probably cutting edge anyway.
+
+## Conclusions
+
+The model clearly does best when it comes to finding missing references in
+papers it has been trained on (like paper 2) or references of popular papers.
+
+It is fairly hard to guess whether this means that we can create a
+better model just by training on as many papers old and new as possible. It
+could be that the results for paper 2 were better simply because it is an
+already popular paper with lots of citations (that might also have been
+trained on) creating a sort of feedback loop, same with the older papers
+that were detected as citations.
+
+The question still remains if it is possible to have good results for papers
+in cutting edge research fields if we've trained on all their references
+already.
