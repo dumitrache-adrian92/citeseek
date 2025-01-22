@@ -2,6 +2,7 @@ import os
 
 from datasets import load_dataset
 from elasticsearch import Elasticsearch
+from numpy import ndarray
 from sentence_transformers import SentenceTransformer
 
 
@@ -24,7 +25,7 @@ class PaperDatabase:
     :type tokenizer: PreTrainedTokenizer
     """
 
-    def __init__(self, db_url):
+    def __init__(self, db_url: str):
         self.es = Elasticsearch(db_url)
         print('Connected to Elasticsearch!')
         print(self.es.info())
@@ -42,7 +43,7 @@ class PaperDatabase:
         else:
             print('Model loaded and on GPU!')
 
-    def insert_document_in_index(self, document, index_name):
+    def insert_document_in_index(self, document: dict, index_name: str):
         """
         Inserts a single document into a specified Elasticsearch index with its 
         title and embedding.
@@ -60,7 +61,7 @@ class PaperDatabase:
             'embedding': self.get_embedding(document['abstract'])
         })
 
-    def get_embedding(self, text):
+    def get_embedding(self, text: str):
         """
         Generates a vector embedding for the given text using the pre-trained 
         SentenceTransformer model.
@@ -68,11 +69,11 @@ class PaperDatabase:
         :param text: The input text to generate the embedding for.
         :type text: str
         :return: A dense vector embedding representing the input text.
-        :rtype: numpy.ndarray
+        :rtype: list[Tensor] | ndarray | Tensor
         """
         return self.model.encode(text)
 
-    def create_index(self, index_name):
+    def create_index(self, index_name: str) -> None:
         """
         Creates a new Elasticsearch index with a specified name and maps it to use dense vectors 
         for embedding storage. Deletes the index first if it already exists.
@@ -91,7 +92,17 @@ class PaperDatabase:
             }
         })
 
-    def reindex(self, index_name):
+    def reindex(self, index_name: str) -> None:
+        """
+        Reindexes the core dataset by loading it and inserting its documents into the specified
+        index. Loads the `sentence-transformers/s2orc` dataset with the
+        `title-abstract-pair` configuration and processes all documents.
+        Uses a batch size of 1000 to log progress during insertion for better monitoring.
+
+        :param index_name: The name of the index where documents will be inserted.
+        :type index_name: str
+        :return: None
+        """
         print("Loading dataset")
 
         ds = load_dataset("sentence-transformers/s2orc",
@@ -107,8 +118,23 @@ class PaperDatabase:
 
         print("Finished inserting batches")
 
-    def check_already_indexed(self, title):
-        rsp = self.es.search(index="paper_abstracts", body={
+    def check_already_indexed(self, title: str, index_name: str) -> bool:
+        """
+        Checks if a document with a given title is already indexed in the specified index.
+
+        This function performs a search query on the Elasticsearch instance to determine
+        whether a document with the given title exists in the index. If the search finds at
+        least one result, it returns True, indicating the document is already indexed.
+        Otherwise, it returns False.
+
+        :param title: The title of the document to check for existence in the index.
+        :type title: str
+        :param index_name: The name of the Elasticsearch index to search within.
+        :type index_name: str
+        :return: A boolean value indicating whether the document is already indexed.
+        :rtype: bool
+        """
+        rsp = self.es.search(index=index_name, body={
             "query": {
                 "match": {
                     "title": title
