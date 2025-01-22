@@ -7,11 +7,17 @@ It allows command-line usage to efficiently extract, clean, and preprocess text
 content from scientific documents in bulk or individually.
 """
 
-import pypdf
 import re
 
+from pathlib import Path
+from typing import IO
+from pypdf import PdfReader
 
-def get_paper_text(path, remove_references=False, remove_abstract=False, remove_reference_markers=False):
+
+def get_paper_text(path: str | Path | IO,
+                   remove_references: bool = False,
+                   remove_abstract: bool = False,
+                   remove_reference_markers: bool = False) -> str:
     """
     Extracts text content from a PDF file, with options to remove specific sections 
     or markers. This function reads the content of a PDF document specified by the 
@@ -19,7 +25,7 @@ def get_paper_text(path, remove_references=False, remove_abstract=False, remove_
     references, abstracts, or reference markers if specified.
 
     :param path: The file path to the PDF document.
-    :type path: str
+    :type path: str | Path | IO
     :param remove_references: A flag indicating whether to remove the References 
         section from the extracted text. Default is False.
     :type remove_references: bool
@@ -32,9 +38,9 @@ def get_paper_text(path, remove_references=False, remove_abstract=False, remove_
     :return: The processed text extracted from the PDF document.
     :rtype: str
     """
-    py_pdf = pypdf.PdfReader(path)
+    py_pdf: PdfReader = PdfReader(path)
 
-    pdf_text = ''.join([page.extract_text() for page in py_pdf.pages])
+    pdf_text: str = ''.join([page.extract_text() for page in py_pdf.pages])
 
     if remove_references:
         pdf_text = pdf_text.split('References', 1)[0]
