@@ -11,7 +11,7 @@ import re
 
 from pathlib import Path
 from typing import IO
-from pypdf import PdfReader
+from pdfminer.high_level import extract_text
 
 
 def get_paper_text(path: str | Path | IO,
@@ -38,9 +38,7 @@ def get_paper_text(path: str | Path | IO,
     :return: The processed text extracted from the PDF document.
     :rtype: str
     """
-    py_pdf: PdfReader = PdfReader(path)
-
-    pdf_text: str = ''.join([page.extract_text() for page in py_pdf.pages])
+    pdf_text = extract_text(path)
 
     if remove_references:
         pdf_text = pdf_text.split('References', 1)[0]
