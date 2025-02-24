@@ -1,10 +1,10 @@
-from .paper_database import PaperDatabase
+from .vector_database import VectorDatabase
 
 DATABASE_URL = "http://localhost:9200"
 
 
 def populate_database():
-    db = PaperDatabase(DATABASE_URL)
+    db = VectorDatabase(DATABASE_URL)
     db.reindex("paper_abstracts")
 
 
