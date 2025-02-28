@@ -52,27 +52,22 @@ class VectorDatabase:
                 **document,
             })
 
-        self.es.bulk(operations=operations)
+        return self.es.bulk(operations=operations)
 
-    def create_index(self, index_name: str) -> None:
+    def create_index(self, index_name: str, mappings: dict) -> None:
         """
-        Creates a new Elasticsearch index with a specified name and maps it to use dense vectors 
+        Creates a new Elasticsearch index with a specified name and mapping configuration.
         for embedding storage. Deletes the index first if it already exists.
     
         :param index_name: The name of the Elasticsearch index to create or recreate.
         :type index_name: str
+        :param mappings: The mapping configuration for the index.
+        :type mappings: dict
         :return: None
         :rtype: NoneType
         """
         self.es.indices.delete(index=index_name, ignore_unavailable=True)
-        self.es.indices.create(index=index_name, mappings={
-            'properties': {
-                'embedding': {
-                    'type': 'dense_vector',
-                    'similarity': 'cosine'
-                }
-            }
-        })
+        self.es.indices.create(index=index_name, mappings=mappings)
 
     def check_already_indexed(self, title: str, index_name: str) -> bool:
         """
@@ -92,7 +87,7 @@ class VectorDatabase:
         """
         rsp = self.es.search(index=index_name, body={
             "query": {
-                "match": {
+                "match_phrase": {
                     "title": title
                 }
             }
@@ -100,7 +95,7 @@ class VectorDatabase:
 
         return rsp['hits']['total']['value'] > 0
 
-    def knn_search(self, query_vector: list[float], index_name: str, k: int = 10) -> list[dict]:
+    def knn_search(self, query_vector: list[float], index_name: str, field: str, k: int = 10) -> list[dict]:
         """
         Performs a k-nearest neighbors search on the specified index using the given query vector.
 
@@ -108,13 +103,17 @@ class VectorDatabase:
         :type query_vector: list[float]
         :param index_name: The name of the Elasticsearch index to search within.
         :type index_name: str
+        :param field: The field in the index to use for the k-NN
+        :type field: str
         :param k: The number of nearest neighbors to return.
         :type k: int
+        :return: A list of the k nearest neighbors to the query vector.
+        :rtype: list[dict]
         """
         rsp = self.es.search(
             index=index_name,
             knn={
-                'field': 'embedding',
+                'field': field,
                 'query_vector': query_vector,
                 'num_candidates': 10000,
                 'k': k,
