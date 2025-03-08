@@ -19,24 +19,25 @@ def get_paper_text(path: str | Path | IO,
                    remove_abstract: bool = False,
                    remove_reference_markers: bool = False) -> str:
     """
-    Extracts text content from a PDF file, with options to remove specific sections 
-    or markers. This function reads the content of a PDF document specified by the 
-    given file path and returns the extracted text. It can optionally exclude 
-    references, abstracts, or reference markers if specified.
+    Extracts text content from a PDF file, with options to remove specific sections
+    or markers.
 
-    :param path: The file path to the PDF document.
-    :type path: str | Path | IO
-    :param remove_references: A flag indicating whether to remove the References 
-        section from the extracted text. Default is False.
-    :type remove_references: bool
-    :param remove_abstract: A flag indicating whether to remove the Abstract section 
-        from the extracted text. Default is False.
-    :type remove_abstract: bool
-    :param remove_reference_markers: A flag indicating whether to remove reference 
-        markers (e.g., [1], [1, 2], [1-3]) from the extracted text. Default is False.
-    :type remove_reference_markers: bool
-    :return: The processed text extracted from the PDF document.
-    :rtype: str
+    This function reads the content of a PDF document specified by the given file
+    path and returns the extracted text. It can optionally exclude references,
+    abstracts, or reference markers if specified.
+
+    Args:
+        path (str | Path | IO): The file path to the PDF document.
+        remove_references (bool): A flag indicating whether to remove the References
+            section from the extracted text. Default is False.
+        remove_abstract (bool): A flag indicating whether to remove the Abstract
+            section from the extracted text. Default is False.
+        remove_reference_markers (bool): A flag indicating whether to remove
+            reference markers (e.g., [1], [1, 2], [1-3]) from the extracted text.
+            Default is False.
+
+    Returns:
+        str: The processed text extracted from the PDF document.
     """
     pdf_text = extract_text(path)
 

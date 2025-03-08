@@ -11,16 +11,17 @@ class VectorDatabase:
 
     def insert_document_in_index(self, document: dict, index_name: str):
         """
-        Inserts a single document into a specified Elasticsearch index with its 
+        Inserts a single document into a specified Elasticsearch index with its
         title and embedding.
-    
-        :param document: A dictionary containing `the document to be indexed.
-                         Must include a 'title' key (str) and an 'abstract' key (str).
-        :type document: dict
-        :param index_name: The name of the Elasticsearch index where the document 
-                           should be stored.
-        :type index_name: str
-        :return: None
+
+        Args:
+            document (dict): A dictionary containing the document to be indexed.
+                             Must include a 'title' key (str) and an 'abstract' key (str).
+            index_name (str): The name of the Elasticsearch index where the document
+                              should be stored.
+
+        Returns:
+            None
         """
         self.es.index(index=index_name, document={
             **document,
@@ -31,13 +32,13 @@ class VectorDatabase:
         Inserts a list of documents into a specified Elasticsearch index with their
         titles and embeddings.
 
-        :param documents: A list of dictionaries containing the documents to be indexed.
-                          Each dictionary must include a 'title' key (str) and an 'abstract' key (str).
-        :type documents: list[dict]
-        :param index_name: The name of the Elasticsearch index where the documents
-                           should be stored.
-        :type index_name: str
-        :return: None
+        Args:
+            documents (list[dict]): A list of dictionaries containing the documents to be indexed.
+                                    Each dictionary must include a 'title' key (str) and an 'abstract' key (str).
+            index_name (str): The name of the Elasticsearch index where the documents should be stored.
+
+        Returns:
+            None
         """
         operations = []
         
@@ -56,16 +57,16 @@ class VectorDatabase:
 
     def create_index(self, index_name: str, mappings: dict) -> None:
         """
-        Creates a new Elasticsearch index with a specified name and mapping configuration.
-        for embedding storage. Deletes the index first if it already exists.
-    
-        :param index_name: The name of the Elasticsearch index to create or recreate.
-        :type index_name: str
-        :param mappings: The mapping configuration for the index.
-        :type mappings: dict
-        :return: None
-        :rtype: NoneType
-        """
+            Creates a new Elasticsearch index with a specified name and mapping configuration
+            for embedding storage. Deletes the index first if it already exists.
+
+            Args:
+                index_name (str): The name of the Elasticsearch index to create or recreate.
+                mappings (dict): The mapping configuration for the index.
+
+            Returns:
+                None
+            """
         self.es.indices.delete(index=index_name, ignore_unavailable=True)
         self.es.indices.create(index=index_name, mappings=mappings)
 
@@ -78,12 +79,12 @@ class VectorDatabase:
         least one result, it returns True, indicating the document is already indexed.
         Otherwise, it returns False.
 
-        :param title: The title of the document to check for existence in the index.
-        :type title: str
-        :param index_name: The name of the Elasticsearch index to search within.
-        :type index_name: str
-        :return: A boolean value indicating whether the document is already indexed.
-        :rtype: bool
+        Args:
+            title (str): The title of the document to check for existence in the index.
+            index_name (str): The name of the Elasticsearch index to search within.
+
+        Returns:
+            bool: A boolean value indicating whether the document is already indexed.
         """
         rsp = self.es.search(index=index_name, body={
             "query": {
@@ -99,16 +100,14 @@ class VectorDatabase:
         """
         Performs a k-nearest neighbors search on the specified index using the given query vector.
 
-        :param query_vector: The query vector to use for the k-NN search.
-        :type query_vector: list[float]
-        :param index_name: The name of the Elasticsearch index to search within.
-        :type index_name: str
-        :param field: The field in the index to use for the k-NN
-        :type field: str
-        :param k: The number of nearest neighbors to return.
-        :type k: int
-        :return: A list of the k nearest neighbors to the query vector.
-        :rtype: list[dict]
+        Args:
+            query_vector (list[float]): The query vector to use for the k-NN search.
+            index_name (str): The name of the Elasticsearch index to search within.
+            field (str): The field in the index to use for the k-NN.
+            k (int): The number of nearest neighbors to return.
+
+        Returns:
+            list[dict]: A list of the k nearest neighbors to the query vector.
         """
         rsp = self.es.search(
             index=index_name,
