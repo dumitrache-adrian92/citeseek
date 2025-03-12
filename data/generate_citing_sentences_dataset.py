@@ -17,12 +17,16 @@ import os
 import pandas as pd
 import re
 
-from datasets import Dataset
+from sklearn.model_selection import train_test_split
+
+TEST_PQ = "citing_test.parquet"
+VAL_PQ = "citing_val.parquet"
+TRAIN_PQ = "citing_train.parquet"
 
 CITATION_REGEX = r" ?(\[\d+(?:-\d+|(?:, ?\d+(-\d+)?)*)+\]|<([A-Z]+:[a-zA-Z0-9._:/-]*)>) ?"
 
 
-def generate_citing_sentences_dataset(data_dir: str, output_dir: str) -> str:
+def generate_citing_sentences_dataset(data_dir: str, output_dir: str):
     # Glob all .txt files in the hierarchy
     files = []
 
@@ -33,32 +37,51 @@ def generate_citing_sentences_dataset(data_dir: str, output_dir: str) -> str:
 
     print(f"Found {len(files)} files")
 
-    df = pd.DataFrame(map(lambda sentence: [re.sub(CITATION_REGEX,
-                                                   "",
-                                                   sentence),
-                                            bool(re.search(CITATION_REGEX,
-                                                           sentence))
-                                            ],
-                          [sentences for file in files for sentences in
-                           open(file, "r", encoding="utf-8").read().split("\n============\n")]),
-                      columns=["sentence", "citing"])
+    # Construct the dataset in memory (requires 3 GB of RAM)
+    df = pd.DataFrame(
+        map(
+            lambda sentence: [
+                re.sub(CITATION_REGEX, "", sentence),
+                bool(re.search(CITATION_REGEX, sentence)),
+            ],
+            [
+                sentences
+                for file in files
+                for sentences in open(file, "r", encoding="utf-8")
+                .read()
+                .split("\n============\n")
+            ],
+        ),
+        columns=["sentence", "citing"],
+    )
 
-    df.to_csv(os.path.join(output_dir, "citing_sentences.csv"), index=False)
+    # split the dataset into training, validation and test sets (80/10/10)
+    df_train, df_test = train_test_split(df, test_size=0.2, random_state=42)
+    df_test, df_val = train_test_split(df_test, test_size=0.5, random_state=42)
 
-    return os.path.join(output_dir, "citing_sentences.csv")
-
-
-def generate_hf_dataset(path: str, output_dir: str) -> None:
-    ds = Dataset.from_csv(path)
-    ds.save_to_disk(output_dir + "/citing_sentences")
+    # save the datasets to disk
+    df_train.to_parquet(
+        os.path.join(output_dir, TRAIN_PQ),
+        engine="pyarrow",
+        compression="snappy",
+    )
+    df_val.to_parquet(
+        os.path.join(output_dir, VAL_PQ),
+        engine="pyarrow",
+        compression="snappy",
+    )
+    df_test.to_parquet(
+        os.path.join(output_dir, TEST_PQ),
+        engine="pyarrow",
+        compression="snappy",
+    )
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--data-dir", type=str, required=True, help="Directory with the raw data files")
-    parser.add_argument("--output-dir", type=str, required=True, help="Directory to save the generated dataset")
+    parser.add_argument("--output-dir", type=str, required=True,
+                        help="Directory to save the generated dataset")
     args = parser.parse_args()
 
-    # Generation done in two steps: raw data -> csv -> HuggingFace dataset
-    csv_path = generate_citing_sentences_dataset(args.data_dir, args.output_dir)
-    generate_hf_dataset(csv_path, args.output_dir)
+    generate_citing_sentences_dataset(args.data_dir, args.output_dir)
