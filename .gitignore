@@ -2,3 +2,4 @@
 __pycache__/
 secrets/*
 .idea/
+keep_api_key_alive.py
