@@ -78,7 +78,13 @@ class MissingCitationRetriever:
         retrieved: List[Document]
         reordered: List[str]
 
-    def __init__(self, url='http://localhost:9200', citing_sentence_classifier_path=None):
+    def __init__(self,
+                 url='http://localhost:9200',
+                 citing_sentence_classifier_path=None,
+                 embeddings_index='paper_embeddings',
+                 paper_index='papers'):
+        self.embeddings_index = embeddings_index
+        self.paper_index = paper_index
         if not os.getenv('OPENAI_API_KEY'):
             raise ValueError("OPENAI_API_KEY is not set.")
 
@@ -93,7 +99,7 @@ class MissingCitationRetriever:
         logging.info(f"Loaded embedding model {self._embeddings.model_name} on device {device}")
 
         self._QUERY = "Given a sentence where a paper is cited, find the abstract of the paper it cites."
-        self._vector_store = ElasticsearchStore('paper_embeddings',
+        self._vector_store = ElasticsearchStore(self.embeddings_index,
                                                 embedding=self._embeddings,
                                                 es_url=url)
         self._es = Elasticsearch(url)
@@ -125,7 +131,7 @@ class MissingCitationRetriever:
         """
         ids = self._insert_documents_in_index([{'title': title, 'abstract': abstract}
                                                for title, abstract in zip(titles, abstracts)],
-                                              'papers')
+                                              self.paper_index)
 
         docs: [Document] = [Document(page_content="\n\n".join([title, abstract]),
                                      metadata={'id': id_})
@@ -225,7 +231,7 @@ class MissingCitationRetriever:
 
         # Retrieve complete documents using the IDs
         doc_ids = [snippet.metadata['id'] for snippet in retrieved_snippets]
-        docs_response = self._es.mget(index='papers', body={'ids': doc_ids})
+        docs_response = self._es.mget(index=self.paper_index, body={'ids': doc_ids})
         docs = [doc['_source'] for doc in docs_response['docs'] if doc['found']]
 
         return {'retrieved': [Document(page_content=doc['title'] + '\n\n' + doc['abstract'],
