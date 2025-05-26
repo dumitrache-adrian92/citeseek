@@ -40,6 +40,8 @@ class MissingCitationRetriever:
     Args:
         url (str): The URL of the Elasticsearch instance.
         citing_sentence_classifier_path (str): The path to the citing sentence classifier model.
+        embeddings_index (str): The name of the index to use for storing the embeddings.
+        paper_index (str): The name of the index to use for storing the papers.
 
     Attributes:
         _embeddings (HuggingFaceEmbeddings): The embeddings model used for vector representation.
@@ -82,13 +84,18 @@ class MissingCitationRetriever:
                  url='http://localhost:9200',
                  citing_sentence_classifier_path=None,
                  embeddings_index='paper_embeddings',
-                 paper_index='papers'):
+                 paper_index='papers',
+                 silent: bool = False):
         self.embeddings_index = embeddings_index
         self.paper_index = paper_index
         if not os.getenv('OPENAI_API_KEY'):
             raise ValueError("OPENAI_API_KEY is not set.")
 
-        logging.basicConfig(level=logging.INFO)
+        if silent:
+            logging.basicConfig(level=logging.WARNING)
+        else:
+            logging.basicConfig(level=logging.INFO)
+
         device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
         model_kwargs = {'device': device}
@@ -133,9 +140,9 @@ class MissingCitationRetriever:
                                                for title, abstract in zip(titles, abstracts)],
                                               self.paper_index)
 
-        docs: [Document] = [Document(page_content="\n\n".join([title, abstract]),
-                                     metadata={'id': id_})
-                            for title, abstract, id_ in zip(titles, abstracts, ids)]
+        docs: list[Document] = [Document(page_content="\n\n".join([title, abstract]),
+                                         metadata={'id': id_})
+                                for title, abstract, id_ in zip(titles, abstracts, ids)]
 
         split_docs = self._text_splitter.split_documents(docs)
 
@@ -186,7 +193,7 @@ class MissingCitationRetriever:
             results.extend(self._citing_sentence_classifier(sentences[i:i + batch_size]))
         return results
 
-    def _insert_documents_in_index(self, documents: list[dict], index_name: str) -> [str]:
+    def _insert_documents_in_index(self, documents: list[dict], index_name: str) -> list[str]:
         """
         Inserts a list of documents into a specified Elasticsearch index.
 
