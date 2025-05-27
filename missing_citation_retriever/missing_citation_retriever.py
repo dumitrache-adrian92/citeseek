@@ -4,17 +4,21 @@ import re
 import torch
 
 from elasticsearch import Elasticsearch
-from langchain_community.document_compressors import RankLLMRerank
 from langchain_core.documents import Document
 from langchain_elasticsearch import ElasticsearchStore
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from nltk import sent_tokenize
+
 from paper_text_extractor.paper_text_extractor import get_paper_text
 from pathlib import Path
 from transformers import pipeline
 from typing import TypedDict, List
 from langgraph.graph import START, StateGraph
+
+from missing_citation_retriever.reranker_strategy import (RerankerStrategy,
+                                                          OpenAIRerankerStrategy,
+                                                          GeminiRerankerStrategy)
 
 
 def _format_query_instruction(task_description: str, query: str) -> str:
@@ -50,7 +54,7 @@ class MissingCitationRetriever:
         _es (Elasticsearch): The Elasticsearch client.
         _text_splitter (RecursiveCharacterTextSplitter): The text splitter for document chunking.
         _citing_sentence_classifier (pipeline): The HuggingFace pipeline for sentence classification.
-        _reranker (RankLLMRerank): The language model reranker for reordering retrieved documents.
+        _reranker_strategy (RerankerStrategy): The strategy for re-ranking retrieved documents.
         _graph (StateGraph): The state graph for processing sentences.
 
     Methods:
@@ -85,11 +89,12 @@ class MissingCitationRetriever:
                  citing_sentence_classifier_path=None,
                  embeddings_index='paper_embeddings',
                  paper_index='papers',
-                 silent: bool = False):
+                 k=50,
+                 silent: bool = False,
+                 provider: str = 'gemini'):
         self.embeddings_index = embeddings_index
         self.paper_index = paper_index
-        if not os.getenv('OPENAI_API_KEY'):
-            raise ValueError("OPENAI_API_KEY is not set.")
+        self.k = k
 
         if silent:
             logging.basicConfig(level=logging.WARNING)
@@ -120,7 +125,30 @@ class MissingCitationRetriever:
                                                     device=device)
         self._citing_sentence_classifier.model.config.id2label = {0: False, 1: True}
 
-        self._reranker = RankLLMRerank(top_n=5, model='gpt', gpt_model='gpt-4o-mini')
+        # Initialize the reranker strategy based on the provider
+        provider = provider.lower()
+        if provider == 'openai':
+            logging.info("Using OpenAI GPT for reranking")
+
+            if not os.getenv('OPENAI_API_KEY'):
+                raise ValueError("OPENAI_API_KEY is not set.")
+
+            self._reranker_strategy = OpenAIRerankerStrategy(top_n=5, model='gpt-4o-mini')
+        elif provider == 'gemini':
+            logging.info("Using Gemini for reranking")
+
+            if not os.getenv('GEMINI_API_KEY'):
+                raise ValueError("GEMINI_API_KEY is not set.")
+
+            self._reranker_strategy = GeminiRerankerStrategy(
+                top_n=5,
+                model='gemini-2.0-flash-001',
+                api_key=os.getenv('GEMINI_API_KEY'),
+                max_tokens=8192,
+                context_size=8192
+            )
+        else:
+            raise ValueError(f"Unsupported provider: {provider}. Use 'openai' or 'gemini'.")
 
         graph_builder = StateGraph(self.State).add_sequence([self._retrieve, self._reorder])
         graph_builder.add_edge(START, "_retrieve")
@@ -233,7 +261,7 @@ class MissingCitationRetriever:
         """
         instruction = _format_query_instruction(self._QUERY, state['sentence'])
         retrieved_snippets = self._vector_store.similarity_search(instruction,
-                                                                  k=50,
+                                                                  k=self.k,
                                                                   fetch_k=10000)
 
         # Retrieve complete documents using the IDs
@@ -255,7 +283,6 @@ class MissingCitationRetriever:
         Returns:
             dict: The updated state of the system.
         """
-        reranked_docs = self._reranker.compress_documents(state['retrieved'],
-                                                          _format_query_instruction(self._QUERY, state['sentence']))
+        instruction = _format_query_instruction(self._QUERY, state['sentence'])
 
-        return {'reordered': [doc.metadata['title'] for doc in reranked_docs]}
+        return {'reordered': self._reranker_strategy.rerank(state['retrieved'], instruction)}
