@@ -2,6 +2,7 @@ import logging
 import os
 import re
 import torch
+from enum import Enum, auto
 
 from elasticsearch import Elasticsearch
 from langchain_core.documents import Document
@@ -19,6 +20,17 @@ from langgraph.graph import START, StateGraph
 from missing_citation_retriever.reranker_strategy import (RerankerStrategy,
                                                           OpenAIRerankerStrategy,
                                                           GeminiRerankerStrategy)
+
+
+class RerankerProvider(str, Enum):
+    """Available reranker providers for the MissingCitationRetriever."""
+    OPENAI = "openai"
+    GEMINI = "gemini"
+
+    @classmethod
+    def get_available_providers(cls) -> List[str]:
+        """Return a list of all available provider names."""
+        return [provider.value for provider in cls]
 
 
 def _format_query_instruction(task_description: str, query: str) -> str:
@@ -127,14 +139,14 @@ class MissingCitationRetriever:
 
         # Initialize the reranker strategy based on the provider
         provider = provider.lower()
-        if provider == 'openai':
+        if provider == RerankerProvider.OPENAI.value:
             logging.info("Using OpenAI GPT for reranking")
 
             if not os.getenv('OPENAI_API_KEY'):
                 raise ValueError("OPENAI_API_KEY is not set.")
 
             self._reranker_strategy = OpenAIRerankerStrategy(top_n=5, model='gpt-4o-mini')
-        elif provider == 'gemini':
+        elif provider == RerankerProvider.GEMINI.value:
             logging.info("Using Gemini for reranking")
 
             if not os.getenv('GEMINI_API_KEY'):
@@ -148,7 +160,7 @@ class MissingCitationRetriever:
                 context_size=8192
             )
         else:
-            raise ValueError(f"Unsupported provider: {provider}. Use 'openai' or 'gemini'.")
+            raise ValueError(f"Unsupported provider: {provider}. Use one of {RerankerProvider.get_available_providers()}.")
 
         graph_builder = StateGraph(self.State).add_sequence([self._retrieve, self._reorder])
         graph_builder.add_edge(START, "_retrieve")
