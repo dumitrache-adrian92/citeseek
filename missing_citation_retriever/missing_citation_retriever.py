@@ -2,7 +2,7 @@ import logging
 import os
 import re
 import torch
-from enum import Enum, auto
+from enum import Enum
 
 from elasticsearch import Elasticsearch
 from langchain_core.documents import Document
@@ -10,16 +10,17 @@ from langchain_elasticsearch import ElasticsearchStore
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from nltk import sent_tokenize
-
 from paper_text_extractor.paper_text_extractor import get_paper_text
 from pathlib import Path
-from transformers import pipeline
 from typing import TypedDict, List
 from langgraph.graph import START, StateGraph
 
 from missing_citation_retriever.reranker_strategy import (RerankerStrategy,
                                                           OpenAIRerankerStrategy,
                                                           GeminiRerankerStrategy)
+from missing_citation_retriever.gemini_citing_sentence_classifier import GeminiCitingSentenceClassifier
+
+citation_regex = r' ?(?:\[\d+(?:-\d+|(?:, ?\d+(-\d+)?)*)+\]|\([^)]*et al\.(?:, ?\d{4})?\)|[A-Za-z]+ et al\.) ?'
 
 
 class RerankerProvider(str, Enum):
@@ -38,10 +39,14 @@ def _format_query_instruction(task_description: str, query: str) -> str:
 
 
 def _contains_reference(sentence: str) -> bool:
-    # Matches any citation in the form of [1], [1-3], [1, 3], [1, 3-5], [1, 3, 5-7], etc.
-    citation_regex = r' ?\[\d+(?:-\d+|(?:, ?\d+(-\d+)?)*)+\] ?'
+    # Matches any citation in the form of [1], [1-3], [1, 3], [1, 3-5], [1, 3, 5-7], (Dumitrache et al., 2025), etc.
 
     return bool(re.search(citation_regex, sentence))
+
+
+def _remove_reference_markers(sentence: str) -> str:
+    # Removes citation markers like [1], [1-3], [1, 3], (Dumitrache et al., 2025), etc.
+    return re.sub(citation_regex, '', sentence).strip()
 
 
 class MissingCitationRetriever:
@@ -55,7 +60,6 @@ class MissingCitationRetriever:
 
     Args:
         url (str): The URL of the Elasticsearch instance.
-        citing_sentence_classifier_path (str): The path to the citing sentence classifier model.
         embeddings_index (str): The name of the index to use for storing the embeddings.
         paper_index (str): The name of the index to use for storing the papers.
 
@@ -79,16 +83,6 @@ class MissingCitationRetriever:
 
         classify_sentences(sentences):
             Classifies a list of sentences to determine if they contain citations.
-
-        _insert_documents_in_index(documents, index_name):
-            Inserts a list of documents into a specified Elasticsearch index.
-
-        _retrieve(state):
-            Retrieves papers relevant to the given sentence through a similarity search.
-
-        _reorder(state):
-            Reorders retrieved papers based on the relevance to the given sentence using
-            a language model reranker.
     """
 
     class State(TypedDict):
@@ -98,7 +92,6 @@ class MissingCitationRetriever:
 
     def __init__(self,
                  url='http://localhost:9200',
-                 citing_sentence_classifier_path=None,
                  embeddings_index='paper_embeddings',
                  paper_index='papers',
                  k=50,
@@ -132,10 +125,7 @@ class MissingCitationRetriever:
 
         self._text_splitter = RecursiveCharacterTextSplitter(chunk_size=300, chunk_overlap=100, add_start_index=True)
 
-        self._citing_sentence_classifier = pipeline('text-classification',
-                                                    model=citing_sentence_classifier_path,
-                                                    device=device)
-        self._citing_sentence_classifier.model.config.id2label = {0: False, 1: True}
+        self._citing_sentence_classifier = GeminiCitingSentenceClassifier()
 
         # Initialize the reranker strategy based on the provider
         provider = provider.lower()
@@ -160,7 +150,8 @@ class MissingCitationRetriever:
                 context_size=8192
             )
         else:
-            raise ValueError(f"Unsupported provider: {provider}. Use one of {RerankerProvider.get_available_providers()}.")
+            raise ValueError(f"Unsupported provider: {provider}."
+                             f"Use one of {RerankerProvider.get_available_providers()}.")
 
         graph_builder = StateGraph(self.State).add_sequence([self._retrieve, self._reorder])
         graph_builder.add_edge(START, "_retrieve")
@@ -201,37 +192,30 @@ class MissingCitationRetriever:
         """
         raw_text = get_paper_text(path, remove_references=True, remove_abstract=True)
 
-        sentences = sent_tokenize(raw_text)
-        sentences = list(filter(lambda sentence: not _contains_reference(sentence), sentences))
-        sentences = [sentence.replace('-\n', '') for sentence in sentences]
-        model_output = self.classify_sentences(sentences)
-        citing_sentences = [sentence for sentence, output in zip(sentences, model_output) if output['label']]
+        paragraphs = [
+            [
+                re.sub("\n", " ", _remove_reference_markers(sent).replace("-\n", ""))
+                for sent in paragraph
+            ]
+            for paragraph in [sent_tokenize(p) for p in raw_text.split('\n\n')]
+            if len(paragraph) > 0
+        ]
+        paragraphs = [p for p in paragraphs if len(p) >= 3]
 
-        responses = [self._graph.invoke({'sentence': sentence}) for sentence in citing_sentences]
+        already_citing = list(map(lambda paragraph: list(map(_contains_reference, paragraph)), paragraphs))
+
+        predictions = self._citing_sentence_classifier.process_batch_parallel(paragraphs)
+
+        # Find sentences that should contain citations according to the classifier, but don't
+        sentences = []
+        for paragraph, paragraph_citing, paragraph_predictions in zip(paragraphs, already_citing, predictions):
+            for sentence, is_citing, should_cite in zip(paragraph, paragraph_citing, paragraph_predictions):
+                if not is_citing and should_cite:
+                    sentences.append(sentence)
+
+        responses = [self._graph.invoke({'sentence': sentence}) for sentence in sentences]
 
         return [{r['sentence']: r['reordered']} for r in responses]
-
-    def classify_sentences(self, sentences: List[str]) -> List[dict]:
-        """
-        Run a list of sentences though a citing sentence classifier model to determine if they contain citations.
-
-        Returns a list of dictionaries containing the classification results for each sentence, e.g.:
-        [{'label': False, 'score': 0.9988425374031067}, ...]
-
-        Args:
-            sentences (List[str]): A list of sentences to be classified.
-
-        Returns:
-            List[dict]: A list of dictionaries containing the classification results for each sentence.
-        """
-        if not sentences:
-            return []
-
-        batch_size = 16
-        results = []
-        for i in range(0, len(sentences), batch_size):
-            results.extend(self._citing_sentence_classifier(sentences[i:i + batch_size]))
-        return results
 
     def _insert_documents_in_index(self, documents: list[dict], index_name: str) -> list[str]:
         """

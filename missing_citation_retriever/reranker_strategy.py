@@ -55,7 +55,7 @@ class OpenAIRerankerStrategy(RerankerStrategy):
             List[str]: A list of reranked document titles
         """
         reranked_docs = self._reranker.compress_documents(documents, query)
-        return [doc.metadata['title'] for doc in reranked_docs]
+        return [doc.metadata['title'] for doc in reranked_docs][:self._reranker.top_n]
 
 
 class GeminiRerankerStrategy(RerankerStrategy):
