@@ -98,7 +98,7 @@ class GeminiCitingSentenceClassifier:
                                batch: list[list[str]],
                                initial_delay: float = 0.1,
                                max_retries: int = 25,
-                               max_workers: int = 12) -> list[list[bool]]:
+                               max_workers: int = 10) -> list[list[bool]]:
         """
         Classify a batch of paragraphs in parallel, handling rate limits and retries.
 

@@ -102,5 +102,5 @@ class GeminiRerankerStrategy(RerankerStrategy):
                 ) for doc in documents
             ]
         )
-        reranked_docs = self._reranker.rerank(rerank_request)
+        reranked_docs = self._reranker.rerank(rerank_request, logging=False)
         return [doc.docid for doc in reranked_docs.candidates]

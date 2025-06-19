@@ -2,8 +2,9 @@ import logging
 import os
 import re
 import torch
-from enum import Enum
+import asyncio
 
+from enum import Enum
 from elasticsearch import Elasticsearch
 from langchain_core.documents import Document
 from langchain_elasticsearch import ElasticsearchStore
@@ -179,7 +180,7 @@ class MissingCitationRetriever:
 
         self._vector_store.add_documents(split_docs)
 
-    def check_paper(self, path: Path):
+    async def check_paper(self, path: Path):
         """
         Analyzes a paper to identify sentences that likely contain missing citations and retrieves relevant papers for
         those sentences.
@@ -213,7 +214,8 @@ class MissingCitationRetriever:
                 if not is_citing and should_cite:
                     sentences.append(sentence)
 
-        responses = [self._graph.invoke({'sentence': sentence}) for sentence in sentences]
+        responses = [self._graph.ainvoke({'sentence': sentence}) for sentence in sentences]
+        responses = await asyncio.gather(*responses)
 
         return [{r['sentence']: r['reordered']} for r in responses]
 
