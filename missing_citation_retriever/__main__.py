@@ -11,8 +11,6 @@ if __name__ == '__main__':
     parser.add_argument('path', type=Path, help='Path to the PDF file')
     args = parser.parse_args()
 
-    CLASSIFIER_PATH = "C:\\Users\\Adrian\\Documents\\models\\citing_sentence_classifier"
-
     retriever: MissingCitationRetriever = MissingCitationRetriever()
 
     print(retriever.check_paper(args.path))
