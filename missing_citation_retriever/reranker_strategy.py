@@ -55,6 +55,7 @@ class OpenAIRerankerStrategy(RerankerStrategy):
             List[str]: A list of reranked document titles
         """
         reranked_docs = self._reranker.compress_documents(documents, query)
+        reranked_docs = list({doc.metadata['title']: doc for doc in reranked_docs}.values())
         return [doc.metadata['title'] for doc in reranked_docs][:self._reranker.top_n]
 
 
@@ -75,6 +76,7 @@ class GeminiRerankerStrategy(RerankerStrategy):
             max_tokens (int): Maximum number of tokens
             context_size (int): Context size for the model
         """
+        self.top_n = top_n
         model_coordinator = SafeGenai(top_n=top_n, model=model,
                                       keys=api_key,
                                       max_tokens=max_tokens,
@@ -103,4 +105,5 @@ class GeminiRerankerStrategy(RerankerStrategy):
             ]
         )
         reranked_docs = self._reranker.rerank(rerank_request, logging=False)
-        return [doc.docid for doc in reranked_docs.candidates]
+        reranked_docs.candidates = list({doc.docid: doc for doc in reranked_docs.candidates}.values())
+        return [doc.docid for doc in reranked_docs.candidates][:self.top_n]

@@ -1,3 +1,4 @@
+import logging
 from google import genai
 from google.genai import types
 import concurrent.futures
@@ -79,17 +80,17 @@ class GeminiCitingSentenceClassifier:
                     retry_count += 1
                     if retry_count <= max_retries:
                         wait_time = delay * (2 ** retry_count) + random.uniform(0, 1)
-                        print(
+                        logging.warning(
                             f"Rate limit hit, backing off for {wait_time:.2f} seconds "
                             f"(retry {retry_count}/{max_retries})...")
                         time.sleep(wait_time)
                         delay = wait_time
                     else:
-                        print(f"Max retries exceeded for input, skipping")
+                        logging.warning(f"Max retries exceeded for input, skipping")
                         return ""
                 else:
-                    print(f"Error processing input: {e}")
-                    print(input_text)
+                    logging.warning(f"Error processing input: {e}")
+                    logging.warning(input_text)
                     retry_count += 1
 
         return "ERROR"
@@ -114,6 +115,8 @@ class GeminiCitingSentenceClassifier:
         def submit_with_delay(task_executor, fn, *args, **kwargs):
             time.sleep(random.uniform(0.1, 0.5))
             return task_executor.submit(fn, *args, **kwargs)
+
+        logging.info(f"Classifying {len(batch)} paragraphs.")
 
         results = []
 
@@ -185,7 +188,8 @@ class GeminiCitingSentenceClassifier:
         predictions = output.text.split("\n")
 
         if len(predictions) != len(paragraph):
-            print(f"Warning: Expected {len(paragraph)} predictions, got {len(predictions)}. Adjusting predictions.")
+            logging.warning(f"Warning: Expected {len(paragraph)} predictions, got {len(predictions)}. Adjusting "
+                            f"predictions.")
             predictions = fix_pred(predictions, len(paragraph))
 
         predictions = [pred.split(":")[1].strip().lower() == "check-worthy" for pred in predictions]

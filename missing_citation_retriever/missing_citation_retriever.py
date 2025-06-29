@@ -5,6 +5,8 @@ import torch
 import asyncio
 
 from enum import Enum
+
+import tqdm
 from elasticsearch import Elasticsearch
 from langchain_core.documents import Document
 from langchain_elasticsearch import ElasticsearchStore
@@ -96,16 +98,10 @@ class MissingCitationRetriever:
                  embeddings_index='paper_embeddings',
                  paper_index='papers',
                  k=50,
-                 silent: bool = False,
                  provider: str = 'gemini'):
         self.embeddings_index = embeddings_index
         self.paper_index = paper_index
         self.k = k
-
-        if silent:
-            logging.basicConfig(level=logging.WARNING)
-        else:
-            logging.basicConfig(level=logging.INFO)
 
         device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
@@ -214,6 +210,7 @@ class MissingCitationRetriever:
                 if not is_citing and should_cite:
                     sentences.append(sentence)
 
+        logging.info(f"Recommending citations for detected citing sentences.")
         responses = [self._graph.ainvoke({'sentence': sentence}) for sentence in sentences]
         responses = await asyncio.gather(*responses)
 
